@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 
+import 'dart:typed_data';
+
 class JobApi {
   // Indirizzo del server Dart sul Mac
-  static const String baseUrl = 'http://192.168.1.10:8080';
+  static const String baseUrl = 'http://172.20.10.14:8080';
 
   static const Map<String, String> headersJson = {
     'Content-Type': 'application/json; charset=utf-8',
@@ -107,6 +109,61 @@ class JobApi {
 
     // Inviamo i dati e controlliamo la risposta
     final risposta = await http.Response.fromStream(await richiesta.send());
+
+    controllaRisposta(risposta);
+  }
+
+  // S3: recupera gli annunci della propria azienda
+  static Future<List<Map<String, dynamic>>> annunciAzienda(String token) async {
+    final risposta = await http.get(
+      Uri.parse('$baseUrl/api/me/annunci'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    final dati = controllaRisposta(risposta) as List;
+
+    return dati.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // S3: recupera le candidature di un annuncio
+  static Future<List<Map<String, dynamic>>> candidatureAnnuncio(
+    String token,
+    int annuncioId,
+  ) async {
+    final risposta = await http.get(
+      Uri.parse('$baseUrl/api/annunci/$annuncioId/candidature'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    final dati = controllaRisposta(risposta) as List;
+
+    return dati.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // S3: scarica un PDF con autorizzazione
+  static Future<Uint8List> scaricaCurriculum(
+    String token,
+    int candidaturaId,
+  ) async {
+    final risposta = await http.get(
+      Uri.parse('$baseUrl/api/candidature/$candidaturaId/curriculum'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (risposta.statusCode != 200) {
+      controllaRisposta(risposta);
+      throw Exception('Impossibile scaricare il curriculum');
+    }
+
+    return risposta.bodyBytes;
+  }
+
+  // S3: effettua il logout
+  static Future<void> logout(String token) async {
+    final risposta = await http.post(
+      Uri.parse('$baseUrl/api/logout'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
 
     controllaRisposta(risposta);
   }

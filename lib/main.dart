@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'job_api.dart';
 import 'candidate_screens.dart';
+import 'company_screens.dart';
 
 void main() {
   runApp(const MyApp());
@@ -394,7 +395,7 @@ class _RegistrazioneScreenState extends State<RegistrazioneScreen> {
 // AREA RISERVATA AZIENDALE
 // --------------------------------------------------
 
-class AreaAziendaleScreen extends StatelessWidget {
+class AreaAziendaleScreen extends StatefulWidget {
   final String token;
   final String nomeAzienda;
 
@@ -404,46 +405,203 @@ class AreaAziendaleScreen extends StatelessWidget {
     required this.nomeAzienda,
   });
 
-  Future<void> apriNuovoAnnuncio(BuildContext context) async {
+  @override
+  State<AreaAziendaleScreen> createState() => _AreaAziendaleScreenState();
+}
+
+class _AreaAziendaleScreenState extends State<AreaAziendaleScreen> {
+  late Future<List<Map<String, dynamic>>> annunci;
+
+  bool haPubblicato = false;
+  bool logoutInCorso = false;
+  bool uscitaConsentita = false;
+
+  @override
+  void initState() {
+    super.initState();
+    aggiornaAnnunci();
+  }
+
+  // Recupera gli annunci dell'azienda autenticata
+  void aggiornaAnnunci() {
+    setState(() {
+      annunci = JobApi.annunciAzienda(widget.token);
+    });
+  }
+
+  // Apre il form per pubblicare un nuovo annuncio
+  Future<void> apriNuovoAnnuncio() async {
     final pubblicato = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => NuovoAnnuncioScreen(token: token)),
+      MaterialPageRoute(
+        builder: (_) => NuovoAnnuncioScreen(token: widget.token),
+      ),
     );
 
-    if (!context.mounted) return;
+    if (!mounted) return;
 
-    // Torniamo alla bacheca se l'annuncio è stato pubblicato
     if (pubblicato == true) {
-      Navigator.pop(context, true);
+      haPubblicato = true;
+
+      aggiornaAnnunci();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Annuncio pubblicato con successo!')),
+      );
+    }
+  }
+
+  // Apre le candidature dell'annuncio selezionato
+  void apriCandidature(Map<String, dynamic> annuncio) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            CandidatureScreen(token: widget.token, annuncio: annuncio),
+      ),
+    );
+  }
+
+  // Chiude la sessione e torna alla bacheca pubblica
+  Future<void> esci() async {
+    if (logoutInCorso) return;
+
+    setState(() {
+      logoutInCorso = true;
+    });
+
+    try {
+      await JobApi.logout(widget.token);
+
+      if (!mounted) return;
+
+      // Permettiamo l'uscita solo dopo il logout
+      setState(() {
+        uscitaConsentita = true;
+      });
+
+      // Attendiamo che PopScope aggiorni lo stato
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.pop(context, haPubblicato);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      mostraErrore(context, e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          logoutInCorso = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Area aziendale')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+    return PopScope<bool>(
+      canPop: uscitaConsentita,
+
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Text('Area aziendale'),
+
+          actions: [
+            IconButton(
+              tooltip: 'Logout',
+              onPressed: logoutInCorso ? null : esci,
+              icon: const Icon(Icons.logout),
+            ),
+          ],
+        ),
+
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.business_center, size: 70),
-
-              const SizedBox(height: 16),
-
               Text(
-                'Benvenuta, $nomeAzienda!',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 22),
+                'Benvenuta, ${widget.nomeAzienda}!',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               ElevatedButton.icon(
-                onPressed: () => apriNuovoAnnuncio(context),
+                onPressed: logoutInCorso ? null : apriNuovoAnnuncio,
                 icon: const Icon(Icons.add),
                 label: const Text('Pubblica un annuncio'),
+              ),
+
+              const SizedBox(height: 28),
+
+              const Text(
+                'I tuoi annunci',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+
+              const SizedBox(height: 12),
+
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: annunci,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Errore nel caricamento:\n'
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    }
+
+                    final lista = snapshot.data ?? [];
+
+                    if (lista.isEmpty) {
+                      return const Center(
+                        child: Text('Non hai ancora pubblicato annunci'),
+                      );
+                    }
+
+                    return ListView.builder(
+                      itemCount: lista.length,
+                      itemBuilder: (context, index) {
+                        final annuncio = lista[index];
+
+                        return Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.work_outline),
+
+                            title: Text(annuncio['titolo'] as String),
+
+                            subtitle: Text(
+                              annuncio['descrizione'] as String,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+
+                            trailing: const Icon(Icons.chevron_right),
+
+                            onTap: () {
+                              apriCandidature(annuncio);
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
             ],
           ),
