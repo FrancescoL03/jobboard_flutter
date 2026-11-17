@@ -1,17 +1,34 @@
-# jobboard_flutter
+# JobBoard - Flutter
 
-A new Flutter project.
+Applicazione mobile Flutter per la pubblicazione di annunci di lavoro e la gestione delle candidature.
 
-## Getting Started
+## Avvio dell'applicazione
 
-This project is a starting point for a Flutter application.
+Avviare prima il server Dart (`jobboard_backend`).
 
-A few resources to get you started if this is your first Flutter project:
+Dalla cartella `jobboard_flutter` eseguire:
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Collegamento al server
+
+Il Mac e l'iPhone devono essere collegati alla stessa rete Wi-Fi.
+
+Per ottenere l'indirizzo IP locale del Mac, eseguire nel terminale:
+
+```bash
+ipconfig getifaddr en0
+```
+
+Aprire il file `lib/job_api.dart` e aggiornare la variabile `baseUrl` con l'indirizzo ottenuto, aggiungendo la porta `8080`.
+
+Esempio:
+
+```dart
+static const String baseUrl = 'http://192.168.1.10:8080';
+```
+
+L'indirizzo IP potrebbe cambiare quando si utilizza una rete Wi-Fi diversa.
